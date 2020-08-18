@@ -1,6 +1,7 @@
 #!/usr/bin/env python
 # coding: utf-8
 
+import sys
 import os
 import numpy
 import pandas
@@ -9,16 +10,16 @@ from pynse import *
 from datetime import date
 from requests import get
 from multiprocessing.pool import ThreadPool
+from pathlib import Path
 import logging
+import argparse
 
 # Set debug log level
 logging.basicConfig(level=logging.INFO)
 
 ARCHIVE_CSV_NAME = "ind_nifty500list.csv"
 ARCHIVE_URL = f"https://archives.nseindia.com/content/indices/{ARCHIVE_CSV_NAME}"
-LOCAL_FOLDER = "C:\code\shrinse\data"
-
-
+LOCAL_FOLDER = "C:/Work/exercise/PythonBootcamp/NSE/"
 FROM_DATE = {'year': 2020,
              'month': 8,
              'day': 13}
@@ -27,21 +28,21 @@ FROM_DATE = {'year': 2020,
 def getDate():
     todayDate = date.today()
 
-    return { 'year': todayDate.year,
-             'month': todayDate.month,
-             'day': todayDate.day }
+    return {'year': todayDate.year,
+            'month': todayDate.month,
+            'day': todayDate.day}
 
 
 def downloadCompaniesCsv():
     url = ARCHIVE_URL
     response = get(url)
     logging.debug("Fetching Nifty500 CSV from {}".format(url))
-    with open(os.path.join(LOCAL_FOLDER, ARCHIVE_CSV_NAME), 'wb') as f:
+    with open(os.path.join(arguments['output_path'], ARCHIVE_CSV_NAME), 'wb') as f:
         f.write(response.content)
 
 
 def readCompaniesCsv():
-    companies = pd.read_csv(os.path.join(LOCAL_FOLDER, ARCHIVE_CSV_NAME), delimiter=',')
+    companies = pd.read_csv(os.path.join(arguments['output_path'], ARCHIVE_CSV_NAME), delimiter=',')
     logging.debug("Nifty500 CSV has {} entries".format(len(companies['Symbol'])))
     return companies['Symbol'].to_list()
 
@@ -50,7 +51,7 @@ def updateDatabseIfRequired(csvList, dbList):
     logging.debug("Len in csv {}, len in db {}".format(len(csvList), len(dbList)))
     if set(csvList) != set(dbList):
         logging.info("Nifty symbols will be updated. This will take some time...")
-        # nse.update_symbol_list()
+        nse.update_symbol_list()
     else:
         logging.info("Nifty symbols are up-to-date. No action required.")
 
@@ -59,7 +60,7 @@ def calculateScripParameters(companyName):
     logging.info("Fetching data of {} from NSE".format(companyName))
     try:
         scripHistorical = nse.get_hist(companyName,
-                                       from_date=dt.date(FROM_DATE['year'], FROM_DATE['month'], FROM_DATE['day']),
+                                       from_date=dt.date(toDate['year'] - 1, toDate['month'], toDate['day']),
                                        to_date=dt.date(toDate['year'], toDate['month'], toDate['day']))
     except ValueError as e:
         logging.warning("Error for {}. {}".format(companyName, e))
@@ -110,7 +111,8 @@ def calculateScripParameters(companyName):
 
 
 def saveOutputToExcel(output):
-    fileName = f"{LOCAL_FOLDER}Momentum_{date.today().strftime('%d_%b_%Y')}.xlsx"
+    today_date = getDate()
+    fileName = f"{arguments['output_path']}Momentum_{today_date['day']}_{today_date['month']}_{today_date['year']}.xlsx"
     logging.info("Saving {}".format(fileName))
 
     # Create a Pandas Excel writer using XlsxWriter as the engine.
@@ -124,10 +126,26 @@ def saveOutputToExcel(output):
     writer.close()
 
 
-def main():
-    global nse, toDate
+def parse_arguments():
+    default_nselib_path = str(Path.home() / "Documents" / "pynse") + str(os.sep)
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--lib_path", help=f"Enter path to store pynse library info (default: {default_nselib_path})",
+                        default=default_nselib_path)
+    parser.add_argument("--output_path", help=f"Enter path to store XLS (default: {LOCAL_FOLDER})",
+                        default=LOCAL_FOLDER)
+    args = parser.parse_args()
 
-    nse = Nse(path=LOCAL_FOLDER)
+    logging.debug(f"pynse data path is {args.lib_path}")
+    logging.debug(f"Output data path is {args.output_path}")
+
+    return {'nselib_path': args.lib_path,
+            'output_path': args.output_path}
+
+
+def main():
+    global nse, toDate, arguments
+    arguments = parse_arguments()
+    nse = Nse(path=arguments['nselib_path'])
 
     # Get today's date in integer
     # (day, month, year)
