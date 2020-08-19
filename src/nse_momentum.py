@@ -1,14 +1,8 @@
 #!/usr/bin/env python
 # coding: utf-8
-from datetime import date
-
 import numpy
-
 from pynse import *
-
 from i_engine import IEngine
-
-MAX_THREADS = 20
 
 logger = logging.getLogger(__name__)
 
@@ -21,7 +15,6 @@ def calculateScripParameters(data: IEngine):
 
     logger.info(f"Fetching data of {companyName} from NSE. Date Range: {fromDate} - {toDate}")
 
-    return [companyName, 9999, 9999, 9999, 9999, 9999, 9999, False]
     try:
         scripHistorical = nse.get_hist(companyName,
                                        from_date=fromDate,
